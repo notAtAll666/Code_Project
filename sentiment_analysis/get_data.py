@@ -19,7 +19,7 @@ def get_train_label():  # 读取训练集标签数据，存储为{id:{view:label
 
 
 def get_car_list():  # 读取汽车品牌数据，存储为ls并返回
-    fin = open('data/car_corpus.txt', 'r')
+    fin = open('data/car_list.txt', 'r')
     ls = []
     for line in fin:
         ls.append(line.strip().decode('utf-8'))
@@ -43,28 +43,67 @@ def get_original_doc(name):  # 获取原始文档数据，存储为dic并返回�
     return dic
 
 
+def get_car_str():  # 读取汽车品牌数据，存储为ls并返回
+    fin = open('data/car_list.txt', 'r')
+    ls = '$'
+    for line in fin:
+        ls += line.strip() + '$'
+    return ls.lower().decode('utf-8')
+
+
+def has_same_pre(s):
+    return '$' + s.lower() in car_str
+
+
+def is_in(s):
+    return '$' + s.lower() + '$' in car_str
+
+
+def get_view_and_word(l):  # 从句子中找出视角并返回视角list和词list
+    word_list = []
+    view_list = []
+    i = 0
+    while i < len(l):
+        word = l[i]
+        view = ''
+        while has_same_pre(word):
+            if is_in(word):
+                view = word
+            if i == len(l) - 1:
+                break
+            if has_same_pre(word + l[i + 1]):
+                word = word + l[i + 1]
+                i += 1
+            else:
+                break
+        if view != '':
+            word_list.append(view)
+            if view not in view_list:
+                view_list.append(view)
+        else:
+            word_list.append(word)
+        i += 1
+    return view_list, word_list
+
+
 def get_prase_doc(name):  # 获取解析后文档数据，存储为oid_doc文件
-    car_list = get_car_list()
     original_dic = get_original_doc(name)
     prase_dic = {}
     for sentence_id in original_dic.keys():
         sentence = original_dic[sentence_id]
         seg_list = jieba.cut(sentence)
-        view_list = []
-        word_list = []
-        temp_dic = {}
+        l = []
         for word in seg_list:
-            word_list.append(word)
-            if word in car_list:
-                if word not in view_list:
-                    # dic[word][1] += 1
-                    view_list.append(word)
+            l.append(word)
+        view_list, word_list = get_view_and_word(l)
+        temp_dic = {}
         if len(view_list) == 1:
             view = view_list[0]
+            l = []
             for s in word_list:
-                if s == view:
-                    word_list.remove(view)
-            temp_dic = {view: word_list}
+                if s != view:
+                    l.append(s)
+            temp_dic = {view: l}
         elif len(view_list) > 1:
             for view in view_list:
                 temp_dic[view] = []
@@ -81,8 +120,6 @@ def get_prase_doc(name):  # 获取解析后文档数据，存储为oid_doc文件
                         if len(temp_list) != 0:
                             temp_dic[cur_view] += temp_list
                             temp_list = []
-                    # else:
-                    #     temp_list.append(word)
                     cur_view = word
                 elif word == u'，' or word == u'。':
                     temp_list.append(word)
@@ -99,7 +136,6 @@ def get_prase_doc(name):  # 获取解析后文档数据，存储为oid_doc文件
     elif name == 'test.csv':
         joblib.dump(prase_dic, 'data/oid_doc.' + 'test')
         fo = open('data\prase_test_doc.txt', 'w')
-
     for sentence_id in prase_dic.keys():
         temp = prase_dic[sentence_id]
         if len(temp) != 0:
@@ -114,29 +150,73 @@ def get_prase_doc(name):  # 获取解析后文档数据，存储为oid_doc文件
                 fo.write(str2)
                 fo.write('\n')
 
-#
 # get_car_corpus()
+car_str = get_car_str()
+car_list = get_car_list()
 jieba.load_userdict('data/car_corpus.txt')
 get_train_label()
 get_prase_doc('train.csv')
 get_prase_doc('test.csv')
 
-# dic = {}
-# car_list = get_car_list()
-# print car_list
-# for car in car_list:
-#     dic[car] = [0, 0]
-# label_dic = joblib.load('data/oid_label.train')
-# for key in label_dic.keys():
-#     for view in label_dic[key]:
+doc_dic = get_original_doc('train.csv')
+dic = {}
+dic1 = joblib.load('data/oid_doc.train')
+dic2 = joblib.load('data/oid_label.train')
+
+# i = 0
+# for key in dic2:
+#     for view in dic2[key]:
+#         i += 1
 #         view = view.decode('utf-8')
 #         if view in dic.keys():
 #             dic[view][0] += 1
-# print dic
-# get_prase_doc('train.csv')
-# print dic
+#         else:
+#             dic[view] = [1, 0]
+# j = 0
+# k = 0
+# for key in dic1.keys():
+#     for view in dic1[key]:
+#         if view in dic.keys():
+#             dic[view][1] += 1
+#             j += 1
+#         else:
+#             k += 1
+# print '测试数据共有' + str(i) + '个视角'
+# print '共解析出' + str(j + k) + '个视角'
+# print '共解析错' + str(k) + '个视角'
 # fo = open('a.txt', 'w')
-# for key in car_list:
+# for key in dic.keys():
 #     c = key.encode('utf-8')
 #     fo.write(c + '\t' + str(dic[key][0]) + '\t' + str(dic[key][1]) + '\n')
 # fo.close()
+
+i = 0
+j = 0
+fo = open('b.txt', 'w')
+for key in dic2.keys():
+    if key in dic1.keys():
+        l = []
+        g = []
+        for s in dic2[key].keys():
+            l.append(s)
+        for s in dic1[key].keys():
+            g.append(s)
+        if len(l) == len(g):
+            flag = True
+            for view in l:
+                if view.decode('utf-8') not in g:
+                    flag = False
+            if not flag:
+                j += 1
+                fo.write('\n' + key + '\n')
+                fo.write(doc_dic[key] + '\n')
+                fo.write('/'.join(l) + '\n')
+                fo.write('/'.join(g).encode('utf-8') + '\n')
+            else:
+                i += 1
+        else:
+            j += 1
+    else:
+        j += 1
+print '共解析正确' + str(i) + '条数据'
+print '共解析错误' + str(j) + '条数据'
