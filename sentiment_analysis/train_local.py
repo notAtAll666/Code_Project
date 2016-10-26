@@ -8,6 +8,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.externals import joblib
+from sklearn import cross_validation
 
 trainFile = ''  # sys.argv[1] # gamble / drug
 trainModel = 'lr'  # sys.argv[2] # lr / gbdt
@@ -20,8 +21,8 @@ def proc_train_data():
     fin = open('original/train.csv', 'r')
     label_dic = joblib.load('data/oid_label.train')
     text_dic = joblib.load('data/oid_doc.train')
-    train_doc = []
-    train_label = []
+    docs = []
+    labels = []
     for sentence_id in label_dic.keys():
         for view1 in label_dic[sentence_id].keys():
             if sentence_id in text_dic.keys():
@@ -29,24 +30,10 @@ def proc_train_data():
                     if view1 == view2.encode('utf-8'):
                         content = ' '.join(text_dic[sentence_id][view2])
                         label = label_dic[sentence_id][view1]
-                        train_doc.append(content)
-                        train_label.append(label)
+                        docs.append(content)
+                        labels.append(label)
     fin.close()
-
-    """
-    读取测试数据，放入test_doc和test_index里
-    """
-    test_dic = joblib.load('data/oid_doc.test')
-    test_doc = []
-    test_index = []
-    for sentence_id in test_dic.keys():
-        for view in test_dic[sentence_id].keys():
-            content = ' '.join(test_dic[sentence_id][view])
-            index = sentence_id, view
-            test_doc.append(content)
-            test_index.append(index)
-    fin.close()
-    return train_doc, train_label, test_doc, test_index
+    return cross_validation.train_test_split(docs, labels, test_size=0.2, random_state=random.randint(0, 100))  # 划分验证集
 
 
 def train_tfidf_model(train_data, test_data):
@@ -63,14 +50,14 @@ def train_tfidf_model(train_data, test_data):
     ivoca = {}
     for value, number in tfidf_model.vocabulary_.items():
         ivoca[number] = value
-        print >> fout, value
+        # print >> fout, value
         i += 1
     fout.close()
     print '\t词典长度为:' + str(i)
     return train_vec, test_vec, ivoca
 
 
-def train_classify_model(test_data, train_vec, test_vec, train_labels, test_index, ivoca):
+def train_classify_model(test_data, train_vec, test_vec, train_labels, test_labels, ivoca):
     """
     训练分类模型,保存分类模型和对应的importance
     """
@@ -97,24 +84,7 @@ def train_classify_model(test_data, train_vec, test_vec, train_labels, test_inde
     pred_y = content_model.predict(test_vec.toarray())
     pred_y_test = pred_y[:]
     # 模型效果
-    # calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_y_test, test_data)
-    create_ans(test_index, pred_y_test)
-
-
-def create_ans(test_index, pred_y_test):
-    fo = open('result/answer.csv', 'w')
-    fo.write('SentenceId,View,Opinion\n')
-    i = len(test_index)
-    while i >= 0:
-        fo.write(test_index[i-1][0] + ',' + test_index[i-1][1].encode('utf-8') + ',')
-        if pred_y_test[i-1] == 0:
-            fo.write('neg\n')
-        if pred_y_test[i-1] == 1:
-            fo.write('neu\n')
-        if pred_y_test[i - 1] == 2:
-            fo.write('pos\n')
-        i -= 1
-    fo.close()
+    calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_y_test, test_data)
 
 
 def calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_y_test, test_data):
@@ -125,6 +95,7 @@ def calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_
     # print '\t训练集上AUC:'+str(metrics.roc_auc_score(train_labels, pred_y_train))
     print '\t测试集样本数:'+str(len(test_labels))
     # print '\t测试集上AUC:'+str(metrics.roc_auc_score(test_labels, pred_y_test))
+    print pred_y_test
     pred_y_test_value = [round(line, 0) for line in pred_y_test]
 
     # 把某种形式错分的样本存储到文件里
@@ -153,16 +124,27 @@ def calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_
     print '\t负样本召回率:' + str(s00 * 1.0 / (s00 + s01 + s02))
     print '\t中样本准确率:' + str(s11 * 1.0 / (s01 + s11 + s21))
     print '\t中样本召回率:' + str(s11 * 1.0 / (s10 + s11 + s12))
+    l = joblib.load('data/oid_temp.temp')
+    tp = s00 + s11 + s22
+    fp = s01 + s02 + s10 + s12 + s20 + s21
+    fn1 = l[3] * 1.0 / 5
+    fn2 = l[4] * 1.0 / 5
+    p = tp * 1.0 / (tp + fp + fn2)
+    r = tp * 1.0 / (tp + fn1)
+    f1 = 2.0 * p * r / (p + r)
+    print '\t准确率P:' + str(p)
+    print '\t召回率R:' + str(r)
+    print '\t总得分F1:' + str(f1)
 
 
 if __name__ == '__main__':
     print "模型构建:start..."
     start = time.time()
     print "处理数据中..."
-    train_data, train_label, test_data, test_index = proc_train_data()
+    train_data, test_data, train_labels, test_labels = proc_train_data()
     print "训练tf_idf模型中..."
     train_vec, test_vec, ivoca = train_tfidf_model(train_data, test_data)
     print "训练分类模型中..."
-    train_classify_model(test_data, train_vec, test_vec, train_label, test_index, ivoca)
+    train_classify_model(test_data, train_vec, test_vec, train_labels, test_labels, ivoca)
     end = time.time()
     print "用时%f 分钟:end..." % round((end - start)/60, 4)
