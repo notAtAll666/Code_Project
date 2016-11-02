@@ -18,15 +18,15 @@ def proc_train_data():
     读取训练数据，放入docs和labels里
     """
     fin = open('original/train.csv', 'r')
-    label_dic = joblib.load('data/oid_label.train')
-    text_dic = joblib.load('data/oid_doc.train')
+    label_dic = joblib.load('data/train_label.dump')
+    text_dic = joblib.load('data/prase_train_doc.dump')
     train_doc = []
     train_label = []
     for sentence_id in label_dic.keys():
         for view1 in label_dic[sentence_id].keys():
             if sentence_id in text_dic.keys():
                 for view2 in text_dic[sentence_id].keys():
-                    if view1 == view2.encode('utf-8'):
+                    if view1 == view2:
                         content = ' '.join(text_dic[sentence_id][view2])
                         label = label_dic[sentence_id][view1]
                         train_doc.append(content)
@@ -36,7 +36,7 @@ def proc_train_data():
     """
     读取测试数据，放入test_doc和test_index里
     """
-    test_dic = joblib.load('data/oid_doc.test')
+    test_dic = joblib.load('data/prase_test_doc.dump')
     test_doc = []
     test_index = []
     for sentence_id in test_dic.keys():
@@ -102,8 +102,7 @@ def train_classify_model(test_data, train_vec, test_vec, train_labels, test_inde
 
 
 def create_ans(test_index, pred_y_test):
-    fo = open('result/answer.csv', 'w')
-    fo.write('SentenceId,View,Opinion\n')
+    fo = open('result/answer.csv', 'a')
     i = len(test_index)
     while i >= 0:
         fo.write(test_index[i-1][0] + ',' + test_index[i-1][1].encode('utf-8') + ',')
@@ -125,34 +124,6 @@ def calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_
     # print '\t训练集上AUC:'+str(metrics.roc_auc_score(train_labels, pred_y_train))
     print '\t测试集样本数:'+str(len(test_labels))
     # print '\t测试集上AUC:'+str(metrics.roc_auc_score(test_labels, pred_y_test))
-    pred_y_test_value = [round(line, 0) for line in pred_y_test]
-
-    # 把某种形式错分的样本存储到文件里
-    fout = open('result/wrong.txt', 'w')
-    for k in range(len(pred_y_test_value)):
-        if pred_y_test_value[k] == 0 and test_labels[k] == 1:
-            print >> fout, test_data[k].encode('utf-8')
-    fout.close()
-
-    # 评估模型效果
-    confusion_value = confusion_matrix(test_labels, pred_y_test_value)
-    s00 = confusion_value[0][0]
-    s01 = confusion_value[0][1]
-    s02 = confusion_value[0][2]
-    s10 = confusion_value[1][0]
-    s11 = confusion_value[1][1]
-    s12 = confusion_value[1][2]
-    s20 = confusion_value[2][0]
-    s21 = confusion_value[2][1]
-    s22 = confusion_value[2][2]
-    print confusion_value
-    print '\t总准确率:'+str((s00 + s11 + s22)*1.0 / (s00 + s01 + s02 + s10 + s11 + s12 + s20 + s21 + s22))
-    print '\t正样本准确率:' + str(s22 * 1.0 / (s02 + s12 + s22))
-    print '\t正样本召回率:' + str(s22 * 1.0 / (s20 + s21 + s22))
-    print '\t负样本准确率:' + str(s00 * 1.0 / (s00 + s10 + s20))
-    print '\t负样本召回率:' + str(s00 * 1.0 / (s00 + s01 + s02))
-    print '\t中样本准确率:' + str(s11 * 1.0 / (s01 + s11 + s21))
-    print '\t中样本召回率:' + str(s11 * 1.0 / (s10 + s11 + s12))
 
 
 if __name__ == '__main__':

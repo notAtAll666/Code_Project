@@ -19,15 +19,15 @@ def proc_train_data():
     读取训练数据，放入docs和labels里
     """
     fin = open('original/train.csv', 'r')
-    label_dic = joblib.load('data/oid_label.train')
-    text_dic = joblib.load('data/oid_doc.train')
+    label_dic = joblib.load('data/train_label.dump')
+    text_dic = joblib.load('data/prase_train_doc.dump')
     docs = []
     labels = []
     for sentence_id in label_dic.keys():
         for view1 in label_dic[sentence_id].keys():
             if sentence_id in text_dic.keys():
                 for view2 in text_dic[sentence_id].keys():
-                    if view1 == view2.encode('utf-8'):
+                    if view1 == view2:
                         content = ' '.join(text_dic[sentence_id][view2])
                         label = label_dic[sentence_id][view1]
                         docs.append(content)
@@ -95,13 +95,12 @@ def calc_train_effect(importance, train_labels, test_labels, pred_y_train, pred_
     # print '\t训练集上AUC:'+str(metrics.roc_auc_score(train_labels, pred_y_train))
     print '\t测试集样本数:'+str(len(test_labels))
     # print '\t测试集上AUC:'+str(metrics.roc_auc_score(test_labels, pred_y_test))
-    print pred_y_test
     pred_y_test_value = [round(line, 0) for line in pred_y_test]
 
     # 把某种形式错分的样本存储到文件里
     fout = open('result/wrong.txt', 'w')
     for k in range(len(pred_y_test_value)):
-        if pred_y_test_value[k] == 0 and test_labels[k] == 1:
+        if pred_y_test_value[k] == 1 and test_labels[k] == 0:
             print >> fout, test_data[k].encode('utf-8')
     fout.close()
 
